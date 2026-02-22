@@ -38,6 +38,7 @@ If called with no option, lists all versions of the file.
 |--------|-------|-------------|
 | _(none)_ | | List all versions |
 | `--save` | `-s` | **Save a new version of the current file now** |
+| `--hook` | `-k` | **Read Claude Code PreToolUse JSON from stdin and save a version** |
 | `--view <id>` | `-v <id>` | Print a version's contents to stdout |
 | `--restore <id> <dest>` | `-r <id> <dest>` | Restore a version to a new file (history unchanged) |
 | `--replace <id>` | `-p <id>` | Replace current file with an older version |
@@ -67,19 +68,25 @@ $ versions --save myfile.swift
 Saved new version of myfile.swift [Feb 21, 2026 at 9:00:00 AM].
 ```
 
-Use this in a Claude Code pre-tool-use hook to snapshot files before Claude edits them:
+### Use as a Claude Code hook
 
-```python
-# ~/.claude/hooks/pre_tool_use.py
-import json, sys, subprocess, os
+`--hook` reads a Claude Code `PreToolUse` JSON payload from stdin, extracts the `file_path`, and saves a version — all in one step, with no wrapper script needed.
 
-data = json.load(sys.stdin)
-if data.get("tool_name") in ("Write", "Edit", "MultiEdit"):
-    path = data.get("tool_input", {}).get("file_path", "")
-    if path and os.path.exists(path):
-        subprocess.run(["versions", "--save", path])
-sys.exit(0)
+Add this to `~/.claude/settings.json` to automatically snapshot files before Claude edits them:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Write|Edit|MultiEdit",
+      "hooks": [{ "type": "command", "command": "/usr/local/bin/versions --hook" }]
+    }]
+  }
+}
 ```
+
+- If the file doesn't exist yet (new file), the hook exits silently without error.
+- If the file path can't be versioned, a warning is printed to stderr but Claude is not blocked.
 
 ### View a version
 
@@ -115,7 +122,7 @@ versions --deleteAll myfile.swift   # delete all old versions
 
 ## Author
 
-Rob
+Rob Terrell
 
 ## License
 
